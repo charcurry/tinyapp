@@ -8,12 +8,21 @@ const getUserByEmail = function(email, database) {
 };
 
 const urlsForUser = function(id, database) {
-    let newURLDatabase = {}
+    let newURLDatabase = {};
     for (let key in database) {
-      if (database[key].userID === id) {
-        newURLDatabase[key] = {longURL: database[key].longURL, userID: database[key].userID}
-      }
-    } return newURLDatabase
-  }
+        if (database[key].userID === id) {
+            newURLDatabase[key] = {longURL: database[key].longURL, userID: database[key].userID};
+        }
+    } return newURLDatabase;
+};
 
-module.exports = { getUserByEmail, urlsForUser }
+function generateRandomString() {
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let result = "";
+    for (let i = 0; i < 5; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
+}
+
+module.exports = { getUserByEmail, urlsForUser, generateRandomString };
