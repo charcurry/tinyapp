@@ -1,4 +1,4 @@
-const { getUserByEmail, urlsForUser, generateRandomString } = require("./helpers");
+const { getUserByEmail, urlsForUser, generateRandomString, users, urlDatabase } = require("./helpers");
 const express = require("express");
 const app = express();
 const PORT = 8080; // default port 8080
@@ -14,30 +14,6 @@ app.use(cookieSession({
 }));
 
 app.use(express.urlencoded({ extended: true }));
-
-const urlDatabase = {
-    b6UTxQ: {
-        longURL: "https://www.tsn.ca",
-        userID: "aJ48lW",
-    },
-    i3BoGr: {
-        longURL: "https://www.google.ca",
-        userID: "aJ48lW",
-    },
-};
-
-const users = {
-    userRandomID: {
-        id: "userRandomID",
-        email: "user@example.com",
-        password: "purple-monkey-dinosaur",
-    },
-    user2RandomID: {
-        id: "user2RandomID",
-        email: "user2@example.com",
-        password: "dishwasher-funk",
-    },
-};
 
 //if logged in redirects to urls and to login if not
 app.get("/", (req, res) => {
