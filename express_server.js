@@ -41,19 +41,20 @@ const users = {
 
 //if logged in redirects to urls and to login if not
 app.get("/", (req, res) => {
-  const templateVars = { urls: urlsForUser(req.session.user_id, urlDatabase),
-    user: users[req.session.user_id]};
-  if (typeof templateVars.user === "undefined") {
-    return res.redirect("/login")
-  } else {
-    return res.redirect("/urls")
-  }
+    const user = users[req.session.user_id];
+    if (typeof user === "undefined") {
+        return res.redirect("/login");
+    } else {
+        return res.redirect("/urls");
+    }
 });
 
 //renders the urls page or sends an error if the user is not logged in
 app.get("/urls", (req, res) => {
-    const templateVars = { urls: urlsForUser(req.session.user_id, urlDatabase),
-                           user: users[req.session.user_id]};
+    const userID = req.session.user_id;
+    const urlsOfUser = urlsForUser(userID, urlDatabase);
+    const templateVars = { urls: urlsOfUser,
+        user: users[userID]};
     if (typeof templateVars.user === "undefined") {
         res.send("<html><body>Error: User Must Be Logged In To View URLs</body></html>\n");
     } else {
@@ -63,7 +64,8 @@ app.get("/urls", (req, res) => {
 
 //renders the page for making a new url if the user is logged in
 app.get("/urls/new", (req, res) => {
-    const templateVars = { user: users[req.session.user_id] };
+    const userID = req.session.user_id;
+    const templateVars = { user: users[userID] };
     if (typeof templateVars.user === "undefined") {
         return res.redirect("/login");
     } else {
@@ -73,20 +75,20 @@ app.get("/urls/new", (req, res) => {
 
 //renders the page for a shortened url unless the user is not logged in, the url doesn't belong to the user, or the id does not exist
 app.get("/urls/:id", (req, res) => {
-  const shortURL = req.params.id
-  const userID = req.session.user_id
-  const urlsOfUser = urlsForUser(userID, urlDatabase)
-    if (urlDatabase[req.params.id] === undefined) {
+    const shortURL = req.params.id;
+    const userID = req.session.user_id;
+    const urlsOfUser = urlsForUser(userID, urlDatabase);
+    if (urlDatabase[shortURL] === undefined) {
         res.send("<html><body>Error: ID Does Not Exist</body></html>\n");
-    } else if (typeof users[req.session.user_id] === "undefined") {
+    } else if (typeof users[userID] === "undefined") {
         res.send("<html><body>Error: User Must Be Logged In To Edit URLs</body></html>\n");
-    } else if (urlsForUser(req.session.user_id, urlDatabase)[req.params.id] === undefined) {
+    } else if (urlsOfUser[shortURL] === undefined) {
         res.send("<html><body>Error: This URL Belongs to a Different User</body></html>\n");
     } else {
         const templateVars = { 
-            user: users[req.session.user_id],
-            id: req.params.id, 
-            longURL: urlDatabase[req.params.id].longURL 
+            user: users[userID],
+            id: shortURL, 
+            longURL: urlDatabase[shortURL].longURL 
         };
         res.render("urls_show", templateVars);
     }
@@ -94,7 +96,8 @@ app.get("/urls/:id", (req, res) => {
 
 //redirects the user to the longURL unless the id the user is trying to go to doesn't exist
 app.get("/u/:id", (req, res) => {
-    const longURL = urlDatabase[req.params.id].longURL;
+    const shortURL = req.params.id;
+    const longURL = urlDatabase[shortURL].longURL;
     if (longURL === undefined) {
         res.send("<html><body>Error: id Is Not Recognized</body></html>\n");
     } else {
@@ -104,37 +107,46 @@ app.get("/u/:id", (req, res) => {
 
 //creates a new shortened url and goes to its page
 app.post("/urls", (req, res) => {
-    const templateVars = { user: users[req.session.user_id] };
+    const userID = req.session.user_id;
+    const longURL = req.body.longURL;
+    const templateVars = { user: users[userID] };
     if (typeof templateVars.user === "undefined") {
         res.send("<html><body>Error: User Must Be Logged In To Shorten URLs</body></html>\n");
         return;
     } else {
         const shortURL = generateRandomString();
-        urlDatabase[shortURL] = {longURL: req.body.longURL, userID: req.session.user_id};
+        urlDatabase[shortURL] = {longURL: longURL, userID: userID};
         return res.redirect(`/urls/${shortURL}`);
     }
 });
 
 //edits the longURL of a selected shortened URL
 app.post("/urls/:id", (req, res) => {
-    const templateVars = { user: users[req.session.user_id] };
-    if (req.params.id === undefined) {
+    const shortURL = req.params.id;
+    const userID = req.session.user_id;
+    const newLongURL = req.body.newLongURL;
+    const templateVars = { user: users[userID] };
+    if (shortURL === undefined) {
         res.send("<html><body>Error: ID Does Not Exist</body></html>\n");
     } else if (typeof templateVars.user === "undefined") {
         res.send("<html><body>Error: User Must Be Logged In to Edit URLs</body></html>\n");
     } else {
-        urlDatabase[req.params.id].longURL = req.body.newLongURL;
+        urlDatabase[shortURL].longURL = newLongURL;
         return res.redirect("/urls");
     }
 });
 
 //renders the login page unless the user is already logged in
 app.get("/login", (req, res) => {
+    const email = req.body.email;
+    const password = req.body.password;
+    const userID = req.session.user_id;
+    const shortURL = req.params.id;
     const templateVars = { 
-        email: req.body.email,
-        password: req.body.password,
-        user: users[req.session.user_id],
-        id: req.params.id
+        email: email,
+        password: password,
+        user: users[userID],
+        id: shortURL
     };
     if (typeof templateVars.user !== "undefined") {
         return res.redirect("/urls");
@@ -145,11 +157,15 @@ app.get("/login", (req, res) => {
 
 //renders the registration page if the user is not already logged in
 app.get("/register", (req, res) => {
+    const email = req.body.email;
+    const password = req.body.password;
+    const userID = req.session.user_id;
+    const shortURL = req.params.id;
     const templateVars = { 
-        email: req.body.email,
-        password: req.body.password,
-        user: users[req.session.user_id],
-        id: req.params.id 
+        email: email,
+        password: password,
+        user: users[userID],
+        id: shortURL
     };
     if (typeof templateVars.user !== "undefined") {
         return res.redirect("/urls");
@@ -160,44 +176,53 @@ app.get("/register", (req, res) => {
 
 //deletes a shortened url if the user is logged in, the url belongs to the user, and if the id exists
 app.post("/urls/:id/delete", (req, res) => {
-    const templateVars = { user: users[req.session.user_id] };
+    const shortURL = req.params.id;
+    const userID = req.session.user_id;
+    const urlsOfUser = urlsForUser(userID, urlDatabase);
+    const templateVars = { user: users[userID] };
     if (typeof templateVars.user === "undefined") {
         res.send("<html><body>Error: User Must Be Logged In to Delete URLs</body></html>\n");
-    } else if (req.params.id === undefined) {
+    } else if (shortURL === undefined) {
         res.send("<html><body>Error: ID Does Not Exist</body></html>\n");
-    } else if (urlsForUser(req.session.user_id, urlDatabase)[req.params.id] === undefined) {
+    } else if (urlsOfUser[shortURL] === undefined) {
         res.send("<html><body>Error: Cannot Delete Another Users URL</body></html>\n");
     } else {
-        delete urlDatabase[req.params.id];
+        delete urlDatabase[shortURL];
         return res.redirect("/urls");
     }
 });
 
 //logs the user in, or gives an error
 app.post("/login", (req, res) => {
-    let user = getUserByEmail(req.body.email, users);
+    const password = req.body.password;
+    const email = req.body.email;
+    const userFromEmail = getUserByEmail(email, users);
+    let user = userFromEmail;
     if (user === undefined) {
         res.send("<html><body>Error 403: User not registered</body></html>\n");
-    } else if (bcrypt.compareSync(req.body.password, user.password) !== true) {
+    } else if (bcrypt.compareSync(password, user.password) !== true) {
         res.send("<html><body>Error 403: Password is incorrect</body></html>\n");
     } else {
-        req.session.user_id = user.id;
+      req.session.user_id = user.id;
         return res.redirect("/urls");
     }
 });
 
 //registers a new user if a user with the given email is not already registered, or unless no information is given
 app.post("/register", (req, res) => {
-    let newString = generateRandomString();
-    if (getUserByEmail(req.body.email, users) !== undefined) {
+    const email = req.body.email;
+    const password = req.body.password;
+    const userFromEmail = getUserByEmail(email, users);
+    const newString = generateRandomString();
+    if (userFromEmail !== undefined) {
         res.send("<html><body>Error 400: Bad Request: Email already in use</body></html>\n");
-    } else if (req.body.email === "" || req.body.password === "") {
+    } else if (email === "" || password === "") {
         res.send("<html><body>Error 400: Bad Request: No input given</body></html>\n");
     } else {
         users[newString] = {id: newString,
-            email: req.body.email,
-            password: bcrypt.hashSync(req.body.password, 10)};
-        req.session.user_id = newString;
+            email: email,
+            password: bcrypt.hashSync(password, 10)};
+      req.session.user_id = newString;
         return res.redirect("/urls");
     }
 });
@@ -209,5 +234,5 @@ app.post("/logout", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Example app listening on port ${PORT}!`);
+    console.log(`Example app listening on port ${PORT}!`);
 });
