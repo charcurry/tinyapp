@@ -39,63 +39,27 @@ const users = {
     },
 };
 
-//test path
+//if logged in redirects to urls and to login if not
 app.get("/", (req, res) => {
-    res.send("Hello!");
-});
-
-app.listen(PORT, () => {
-    console.log(`Example app listening on port ${PORT}!`);
-});
-
-//test path
-app.get("/urls.json", (req, res) => {
-    res.json(urlDatabase);
-});
-
-
-//test path
-app.get("/hello", (req, res) => {
-    res.send("<html><body>Hello <b>World</b></body></html>\n");
-});
-
-//logs the user in, or gives an error
-app.post("/login", (req, res) => {
-    let user = getUserByEmail(req.body.email, users);
-    if (user === undefined) {
-        res.send("<html><body>Error 403: User not registered</body></html>\n");
-    } else if (bcrypt.compareSync(req.body.password, user.password) !== true) {
-        res.send("<html><body>Error 403: Password is incorrect</body></html>\n");
-    } else {
-        req.session.user_id = user.id;
-        return res.redirect("/urls");
-    }
+  const templateVars = { urls: urlsForUser(req.session.user_id, urlDatabase),
+    user: users[req.session.user_id]};
+  if (typeof templateVars.user === "undefined") {
+    return res.redirect("/login")
+  } else {
+    return res.redirect("/urls")
+  }
 });
 
 //renders the urls page or sends an error if the user is not logged in
 app.get("/urls", (req, res) => {
-    const templateVars = { urls: urlsForUser(req.session.user_id),
-        user: users[req.session.user_id]};
+    const templateVars = { urls: urlsForUser(req.session.user_id, urlDatabase),
+                           user: users[req.session.user_id]};
     if (typeof templateVars.user === "undefined") {
         res.send("<html><body>Error: User Must Be Logged In To View URLs</body></html>\n");
     } else {
         res.render("urls_index", templateVars);
     }
 }); 
-
-//creates a new shortened url and goes to its page
-app.post("/urls", (req, res) => {
-    const templateVars = { user: users[req.session.user_id] };
-    if (typeof templateVars.user === "undefined") {
-        res.send("<html><body>Error: User Must Be Logged In To Shorten URLs</body></html>\n");
-        return;
-    } else {
-        const shortURL = generateRandomString();
-        urlDatabase[shortURL] = {longURL: req.body.longURL, userID: req.session.user_id};
-        const key = Object.keys(urlDatabase).find(key => urlDatabase[key].longURL === req.body.longURL);
-        return res.redirect("/urls/" + key);
-    }
-});
 
 //renders the page for making a new url if the user is logged in
 app.get("/urls/new", (req, res) => {
@@ -109,11 +73,14 @@ app.get("/urls/new", (req, res) => {
 
 //renders the page for a shortened url unless the user is not logged in, the url doesn't belong to the user, or the id does not exist
 app.get("/urls/:id", (req, res) => {
+  const shortURL = req.params.id
+  const userID = req.session.user_id
+  const urlsOfUser = urlsForUser(userID, urlDatabase)
     if (urlDatabase[req.params.id] === undefined) {
         res.send("<html><body>Error: ID Does Not Exist</body></html>\n");
     } else if (typeof users[req.session.user_id] === "undefined") {
         res.send("<html><body>Error: User Must Be Logged In To Edit URLs</body></html>\n");
-    } else if (urlsForUser(req.session.user_id)[req.params.id] === undefined) {
+    } else if (urlsForUser(req.session.user_id, urlDatabase)[req.params.id] === undefined) {
         res.send("<html><body>Error: This URL Belongs to a Different User</body></html>\n");
     } else {
         const templateVars = { 
@@ -135,18 +102,16 @@ app.get("/u/:id", (req, res) => {
     }
 });
 
-//deletes a shortened url if the user is logged in, the url belongs to the user, and if the id exists
-app.post("/urls/:id/delete", (req, res) => {
+//creates a new shortened url and goes to its page
+app.post("/urls", (req, res) => {
     const templateVars = { user: users[req.session.user_id] };
     if (typeof templateVars.user === "undefined") {
-        res.send("<html><body>Error: User Must Be Logged In to Delete URLs</body></html>\n");
-    } else if (req.params.id === undefined) {
-        res.send("<html><body>Error: ID Does Not Exist</body></html>\n");
-    } else if (urlsForUser(req.session.user_id)[req.params.id] === undefined) {
-        res.send("<html><body>Error: Cannot Delete Another Users URL</body></html>\n");
+        res.send("<html><body>Error: User Must Be Logged In To Shorten URLs</body></html>\n");
+        return;
     } else {
-        delete urlDatabase[req.params.id];
-        return res.redirect("/urls");
+        const shortURL = generateRandomString();
+        urlDatabase[shortURL] = {longURL: req.body.longURL, userID: req.session.user_id};
+        return res.redirect(`/urls/${shortURL}`);
     }
 });
 
@@ -163,10 +128,19 @@ app.post("/urls/:id", (req, res) => {
     }
 });
 
-//logs the user out by deleting the user_id cookie
-app.post("/logout", (req, res) => {
-    req.session = null;
-    return res.redirect("/login");
+//renders the login page unless the user is already logged in
+app.get("/login", (req, res) => {
+    const templateVars = { 
+        email: req.body.email,
+        password: req.body.password,
+        user: users[req.session.user_id],
+        id: req.params.id
+    };
+    if (typeof templateVars.user !== "undefined") {
+        return res.redirect("/urls");
+    } else {
+        res.render("urls_login", templateVars);
+    }
 });
 
 //renders the registration page if the user is not already logged in
@@ -181,6 +155,34 @@ app.get("/register", (req, res) => {
         return res.redirect("/urls");
     } else {
         res.render("urls_register", templateVars);
+    }
+});
+
+//deletes a shortened url if the user is logged in, the url belongs to the user, and if the id exists
+app.post("/urls/:id/delete", (req, res) => {
+    const templateVars = { user: users[req.session.user_id] };
+    if (typeof templateVars.user === "undefined") {
+        res.send("<html><body>Error: User Must Be Logged In to Delete URLs</body></html>\n");
+    } else if (req.params.id === undefined) {
+        res.send("<html><body>Error: ID Does Not Exist</body></html>\n");
+    } else if (urlsForUser(req.session.user_id, urlDatabase)[req.params.id] === undefined) {
+        res.send("<html><body>Error: Cannot Delete Another Users URL</body></html>\n");
+    } else {
+        delete urlDatabase[req.params.id];
+        return res.redirect("/urls");
+    }
+});
+
+//logs the user in, or gives an error
+app.post("/login", (req, res) => {
+    let user = getUserByEmail(req.body.email, users);
+    if (user === undefined) {
+        res.send("<html><body>Error 403: User not registered</body></html>\n");
+    } else if (bcrypt.compareSync(req.body.password, user.password) !== true) {
+        res.send("<html><body>Error 403: Password is incorrect</body></html>\n");
+    } else {
+        req.session.user_id = user.id;
+        return res.redirect("/urls");
     }
 });
 
@@ -200,17 +202,12 @@ app.post("/register", (req, res) => {
     }
 });
 
-//renders the login page unless the user is already logged in
-app.get("/login", (req, res) => {
-    const templateVars = { 
-        email: req.body.email,
-        password: req.body.password,
-        user: users[req.session.user_id],
-        id: req.params.id
-    };
-    if (typeof templateVars.user !== "undefined") {
-        return res.redirect("/urls");
-    } else {
-        res.render("urls_login", templateVars);
-    }
+//logs the user out by deleting the user_id cookie
+app.post("/logout", (req, res) => {
+    req.session = null;
+    return res.redirect("/login");
+});
+
+app.listen(PORT, () => {
+  console.log(`Example app listening on port ${PORT}!`);
 });
